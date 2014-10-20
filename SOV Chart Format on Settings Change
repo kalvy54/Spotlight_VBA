@@ -1,0 +1,134 @@
+Option Explicit
+Sub RadioButtonChange()
+'This macro will set off every time a radio button is changed.
+'It adjusts the ranges that the pie and bar charts point to, and then adjusts the colors.
+
+Dim PieChartCell        As Range        'Cell in pie chart data- for determining if empty
+Dim PieRow              As Integer      'Last row of pie chart data
+
+Dim BarBroadcastCell    As Range        'Cell in bar chart broadcast data- for determining if empty
+Dim BarDataRows         As Integer      'Last row of bar chart data
+Dim ColumnLetter        As String       'Last column of bar chart data
+
+Dim Counter             As Integer      'Pie chart series counter- for setting colors
+Dim varXVal             As Variant      'Name of series in pie chart data- for setting colors
+Dim BarSeries           As Series       'Series in bar chart- for setting colors
+
+On Error GoTo ErrorHandler
+ActiveWorkbook.Sheets("Slide Generator").Unprotect
+
+'Change pie chart data row end
+For Each PieChartCell In ActiveWorkbook.Sheets("FINAL DATA").Range("E17:E29").Cells
+    If PieChartCell.Value <> "" Then
+        PieRow = PieChartCell.Row
+    End If
+Next PieChartCell
+        
+'Change bar chart data row end
+BarDataRows = 4
+For Each BarBroadcastCell In Sheets("FINAL DATA").Range("C5:C14").Cells
+    If BarBroadcastCell.Value <> "" Then
+        BarDataRows = BarDataRows + 1
+    End If
+Next BarBroadcastCell
+
+'Change bar chart data column end
+If Sheets("FINAL DATA").Range("F4").Value <> "" Then
+    ColumnLetter = "F"
+ElseIf Sheets("FINAL DATA").Range("E4").Value <> "" Then
+    ColumnLetter = "E"
+Else
+    ColumnLetter = "D"
+End If
+
+'Set pie chart source to pie data range
+Sheets("Slide Generator").ChartObjects("PieChart").Activate
+ActiveChart.ChartArea.Select
+ActiveChart.SetSourceData Source:=Sheets("FINAL DATA").Range("D17:E" & PieRow)
+
+'Adjust colors in pie chart
+With ActiveChart.SeriesCollection(1)
+Counter = 1
+    For Each varXVal In .XValues
+        
+        'Set anything comcast to dark red and series label to black
+        If Counter = 1 Then
+            .Points(Counter).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+            .Points(Counter).DataLabel.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        ElseIf InStr(1, varXVal, "Comcast") Or InStr(1, varXVal, "Spotlight") Or InStr(1, varXVal, "Nets") Then
+            .Points(Counter).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+            .Points(Counter).DataLabel.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        'Set I+ to dark blue and series label to white
+        ElseIf varXVal = "I+" Then
+            .Points(Counter).Format.Fill.ForeColor.RGB = RGB(23, 55, 94)
+            .Points(Counter).DataLabel.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        'Set everything else (broadcast) to dark gray and series label to black
+        Else
+            .Points(Counter).Format.Fill.ForeColor.RGB = RGB(127, 127, 127)
+            .Points(Counter).DataLabel.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(0, 0, 0)
+        End If
+        
+        Counter = Counter + 1
+    Next varXVal
+    
+End With
+        
+'Set bar chart source to named range
+Sheets("Slide Generator").ChartObjects("BarChart").Activate
+ActiveChart.ChartArea.Select
+ActiveChart.SetSourceData Source:=Sheets("FINAL DATA").Range("B3:" & ColumnLetter & BarDataRows)
+
+'Adjust colors in bar chart
+For Each BarSeries In ActiveChart.SeriesCollection
+    With BarSeries
+            
+        'Set anything Comcast to dark red and series labels to bold and black
+        If InStr(1, BarSeries.Name, "Nets") Or InStr(1, BarSeries.Name, "Comcast") Or InStr(1, BarSeries.Name, "Spotlight") Then
+            .Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+            .datalabels.ShowSeriesName = True
+            .datalabels.Separator = "" & Chr(10) & ""
+            .datalabels.Format.TextFrame2.TextRange.Font.bold = msoTrue
+            .datalabels.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            
+        'Set I+ to dark blue and series labels to bold and white
+        ElseIf InStr(1, BarSeries.Name, "I+") Then
+            .Format.Fill.ForeColor.RGB = RGB(23, 55, 94)
+            .datalabels.ShowSeriesName = True
+            .datalabels.Separator = "" & Chr(10) & ""
+            .datalabels.Format.TextFrame2.TextRange.Font.bold = msoTrue
+            .datalabels.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            
+        'Set everything else (broadcast) to dark gray and series labels to bold and black
+        Else
+            .Format.Fill.ForeColor.RGB = RGB(127, 127, 127)
+            .datalabels.Format.TextFrame2.TextRange.Font.bold = msoTrue
+            .datalabels.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(0, 0, 0)
+        End If
+        
+        'Set 3D bar format
+        .Format.ThreeD.BevelTopInset = 5
+        .Format.ThreeD.BevelTopDepth = 2
+        
+    End With
+Next BarSeries
+
+With ActiveChart.SeriesCollection(2)
+    .Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+    .datalabels.ShowSeriesName = True
+    .datalabels.Separator = "" & Chr(10) & ""
+    .datalabels.Format.TextFrame2.TextRange.Font.bold = msoTrue
+    .datalabels.Format.TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+End With
+
+ErrorExit:
+    On Error Resume Next
+    ActiveWorkbook.Sheets("Slide Generator").Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, AllowUsingPivotTables:=True
+    Exit Sub
+
+ErrorHandler:
+    Dim bBoxResult As Boolean
+    bBoxResult = MsgBox("Unfortunately your selection has caused a macro error." & vbNewLine & vbNewLine & "Please save a copy of this file and contact Thomas " & vbNewLine & "Muller or Katherine Alevizos to diagnose the issue.", vbExclamation, "An Error Occured")
+    Resume ErrorExit
+
+End Sub
+
