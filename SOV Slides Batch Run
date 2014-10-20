@@ -1,0 +1,214 @@
+Option Explicit
+
+Public Type Slice
+    Variable As String
+    Slicer As SlicerCache
+    Items(25) As String
+    ItemsNum As Integer
+End Type
+
+Public SlicerArray(3) As Slice
+Public ChartNum As Integer
+
+Public CancelSOV As Boolean
+Public SlidesNum As Integer
+
+Sub PieBatch()
+
+ChartNum = 1
+Call BatchRun
+
+End Sub
+Sub BarBatch()
+
+ChartNum = 2
+Call BatchRun
+
+End Sub
+    
+Sub BatchRun()
+
+Erase SlicerArray
+SlidesNum = 0
+
+SlicerArray(1).Variable = "Dates"
+SlicerArray(2).Variable = "Demo"
+SlicerArray(3).Variable = "Daypart"
+
+Call PopulateSlice(SlicerArray(1))
+Call PopulateSlice(SlicerArray(2))
+Call PopulateSlice(SlicerArray(3))
+
+SlidesNum = SlicerArray(1).ItemsNum * SlicerArray(2).ItemsNum * SlicerArray(3).ItemsNum
+SOV_Form.Show
+SOV_Form.StartUpPosition = 1
+
+Call ResetFile
+
+End Sub
+
+Sub PopulateSlice(ByRef CurrSlice As Slice)
+
+Dim i As Integer
+Set CurrSlice.Slicer = ThisWorkbook.SlicerCaches("Slicer_" & CurrSlice.Variable)
+CurrSlice.ItemsNum = 0
+With CurrSlice.Slicer
+    For i = 1 To .SlicerItems.Count
+        If .SlicerItems(i).Selected = True And .SlicerItems(i).HasData = True Then
+            CurrSlice.ItemsNum = CurrSlice.ItemsNum + 1
+            CurrSlice.Items(CurrSlice.ItemsNum) = .SlicerItems(i).Value
+        End If
+    Next
+End With
+
+End Sub
+
+Sub ChangeSlicer(ArrayNum As Integer, ItemsCount As Integer)
+    
+    DoEvents
+
+    Dim j As Integer
+    SlicerArray(ArrayNum).Slicer.SlicerItems(1).Selected = True
+    For j = 2 To SlicerArray(ArrayNum).Slicer.SlicerItems.Count
+        If SlicerArray(ArrayNum).Slicer.SlicerItems(j).Value = SlicerArray(ArrayNum).Items(ItemsCount) Then
+            SlicerArray(ArrayNum).Slicer.SlicerItems(j).Selected = True
+        Else
+            SlicerArray(ArrayNum).Slicer.SlicerItems(j).Selected = False
+        End If
+    Next j
+        If SlicerArray(ArrayNum).Slicer.SlicerItems(1).Value <> SlicerArray(ArrayNum).Items(ItemsCount) Then
+            SlicerArray(ArrayNum).Slicer.SlicerItems(1).Selected = False
+        End If
+
+End Sub
+
+Sub ResetFile()
+
+Dim ItemsCount1 As Integer
+Dim ItemsCount2 As Integer
+Dim ItemsCount3 As Integer
+
+ItemsCount1 = 1
+While SlicerArray(1).Items(ItemsCount1) <> ""
+    Dim p As Integer
+    For p = 1 To SlicerArray(1).Slicer.SlicerItems.Count
+        If SlicerArray(1).Slicer.SlicerItems(p).Value = SlicerArray(1).Items(ItemsCount1) Then
+            SlicerArray(1).Slicer.SlicerItems(p).Selected = True
+        End If
+    Next p
+        
+        ItemsCount2 = 1
+        While SlicerArray(2).Items(ItemsCount2) <> ""
+            Dim q As Integer
+            For q = 1 To SlicerArray(2).Slicer.SlicerItems.Count
+                If SlicerArray(2).Slicer.SlicerItems(q).Value = SlicerArray(2).Items(ItemsCount2) Then
+                    SlicerArray(2).Slicer.SlicerItems(q).Selected = True
+                End If
+            Next q
+        
+                ItemsCount3 = 1
+                While SlicerArray(3).Items(ItemsCount3) <> ""
+                    Dim r As Integer
+                    For r = 1 To SlicerArray(3).Slicer.SlicerItems.Count
+                        If SlicerArray(3).Slicer.SlicerItems(r).Value = SlicerArray(3).Items(ItemsCount3) Then
+                            SlicerArray(3).Slicer.SlicerItems(r).Selected = True
+                        End If
+                    Next r
+                        
+                ItemsCount3 = ItemsCount3 + 1
+                Wend
+        ItemsCount2 = ItemsCount2 + 1
+        Wend
+ItemsCount1 = ItemsCount1 + 1
+Wend
+
+Application.ScreenUpdating = True
+
+End Sub
+
+
+Private Sub SOV_Cancel_Click()
+
+CancelSOV = True
+SOV_Form.Hide
+
+End Sub
+
+Private Sub UserForm_Activate()
+
+txtSlidesNumber.Text = SlidesNum
+
+Dim DoneSOV As Boolean
+Dim ItemsCount1 As Integer
+Dim ItemsCount2 As Integer
+Dim ItemsCount3 As Integer
+
+Dim SlideCount As Integer
+Dim pptLayout As CustomLayout
+SlideCount = 1
+CancelSOV = False
+DoneSOV = False
+
+Do While Not CancelSOV And Not DoneSOV
+DoEvents
+
+ItemsCount1 = 1
+While SlicerArray(1).Items(ItemsCount1) <> ""
+    Call ChangeSlicer(1, ItemsCount1)
+        
+        ItemsCount2 = 1
+        While SlicerArray(2).Items(ItemsCount2) <> ""
+            Call ChangeSlicer(2, ItemsCount2)
+        
+                ItemsCount3 = 1
+                While SlicerArray(3).Items(ItemsCount3) <> ""
+                    Call ChangeSlicer(3, ItemsCount3)
+                    
+                            If SlideCount = 1 Then
+                                DoEvents
+                                If CancelSOV Then Exit Sub
+                                txtSlidesNumber.Text = SlideCount & "/" & SlidesNum
+                                Call Setup
+                                If Not VerifyFiles Then Exit Sub
+                                If Not SetSource Then Exit Sub
+                                DoEvents
+                                Set SOVSlide = OpenSlide(PowerPointBase, 1)
+                                If ChartNum = 1 Then
+                                    Call PieSlide
+                                Else
+                                    Call BarSlide
+                                End If
+                                SlideCount = SlideCount + 1
+                                Call CleanUp
+                            Else
+                                DoEvents
+                                If CancelSOV Then Exit Sub
+                                txtSlidesNumber.Text = SlideCount & "/" & SlidesNum
+                                Call Setup
+                                If Not SetSource Then Exit Sub
+                                Set pptLayout = OpenPres.Slides(1).CustomLayout
+                                Set SOVSlide = OpenPres.Slides.AddSlide(SlideCount, pptLayout)
+                                DoEvents
+                                If ChartNum = 1 Then
+                                    Call PieSlide
+                                Else
+                                    Call BarSlide
+                                End If
+                                SlideCount = SlideCount + 1
+                                Call CleanUp
+                            End If
+                            
+                            If SlideCount > SlidesNum Then DoneSOV = True
+                        
+                ItemsCount3 = ItemsCount3 + 1
+                Wend
+        ItemsCount2 = ItemsCount2 + 1
+        Wend
+ItemsCount1 = ItemsCount1 + 1
+Wend
+
+Loop
+
+SOV_Form.Hide
+
+End Sub
