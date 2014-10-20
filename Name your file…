@@ -434,3 +434,18 @@ For Each Worksheet In TargetWorkbook.Sheets
 Next
 
 End Sub
+
+
+Sub HideDataFiles(TargetWorkbook As Workbook, UserSheet As Worksheet)
+'Hide all tabs in TargetWorkbook, other than the UserSheet specified
+
+Dim TargetWorksheet As Worksheet
+For Each TargetWorksheet In TargetWorkbook.Sheets
+    If TargetWorksheet.Name <> UserSheet.Name Then
+        TargetWorksheet.Visible = False
+    Else
+        TargetWorksheet.Visible = True
+    End If
+Next TargetWorksheet
+
+End Sub
