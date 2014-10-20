@@ -1,0 +1,19 @@
+Option Explicit
+
+Sub MapColor()
+
+Dim MapSlide As Slide
+For Each MapSlide In ActivePresentation.Slides
+    Dim SlideObject As Shape
+    For Each SlideObject In MapSlide.Shapes
+        With SlideObject
+            .Fill.ForeColor.RGB = RGB(255, 255, 40)
+            .Fill.Transparency = 0.5
+            .Line.ForeColor.RGB = RGB(127, 127, 127)
+            .Line.Transparency = 0.4
+            .Line.Weight = 1.5
+        End With
+    Next SlideObject
+Next MapSlide
+
+End Sub
