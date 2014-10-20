@@ -1,0 +1,436 @@
+Option Explicit
+
+'Declare global variables
+Public Path                 As String           'Path of this workbook (used to find other files)
+Public SlideGeneratorFile   As Workbook         'Slide Generator File (template)
+Public SweepCount           As Integer          'Number of sweep files for current market
+Public CurrMarketRow        As Integer          'Current market row in data management workbook (this file)
+Public MarketError          As Boolean          'Set to false at beginning of each market update, set to true when error (used to end market procedure)
+
+'Define Sweep type and its variables
+Public Type Sweep
+    SweepNumber             As Integer          'Sweep counter
+    MarketName              As String           'Market name (as it appears in Strata)
+    MarketAbbrev            As String           'Market abbreviation (3 letters)
+    CDMALivePlus            As String           'CDMA Data feed (Live+1, Live+SD, Live+SD NDM, etc)
+    DMALivePlus             As String           'DMA Data feed (Live+1, Live+SD, etc)
+    Month                   As String           'Sweep month (5 characters- MMMYY)
+    WkbkAddress             As String           'Workbook path set before opening (used to open)
+    SourceWkbk              As Workbook         'Sweep file
+    DataSheet               As Worksheet        'Sheet 1 of Sweep file (sheet with data)
+    NDM                     As Boolean          'True if book is NDM
+End Type
+
+'**************************************************************************
+'Program:   UpdateAll
+'Purpose:   Calls procedures to create slide generator files for all markets
+'Inputs:    Button press
+'Assumes:   Data Management file and data folder structure are set up appropriately
+'**************************************************************************
+
+Sub UpdateAll()
+'Update all markets (runs when "Update ALL" button pressed)
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("SFO")
+UpdateMarket ("SAC")
+UpdateMarket ("FRE")
+UpdateMarket ("MON")
+UpdateMarket ("SEA")
+UpdateMarket ("POR")
+UpdateMarket ("SPK")
+UpdateMarket ("EUG")
+UpdateMarket ("DEN")
+UpdateMarket ("SLC")
+UpdateMarket ("ABQ")
+UpdateMarket ("CSP")
+UpdateMarket ("GRJ")
+
+End Sub
+
+'Update individual markets (run when "Update [Market abbreviation]" button pressed)
+
+Sub UpdateSFO()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("SFO")
+
+End Sub
+
+Sub UpdateSAC()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("SAC")
+
+End Sub
+
+Sub UpdateFRE()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("FRE")
+
+End Sub
+Sub UpdateMON()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("MON")
+
+End Sub
+Sub UpdateSEA()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("SEA")
+
+End Sub
+Sub UpdatePOR()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("POR")
+
+End Sub
+Sub UpdateSPK()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("SPK")
+
+End Sub
+Sub UpdateEUG()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("EUG")
+
+End Sub
+Sub UpdateDEN()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("DEN")
+
+End Sub
+Sub UpdateSLC()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("SLC")
+
+End Sub
+Sub UpdateABQ()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("ABQ")
+
+End Sub
+Sub UpdateCSP()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("CSP")
+
+End Sub
+Sub UpdateGRJ()
+
+Path = Application.ActiveWorkbook.Path
+UpdateMarket ("GRJ")
+
+End Sub
+
+'**************************************************************************
+'Program:   UpdateMarket
+'Purpose:   Creates a SOV Slide Generator for the given market (matching "MarketAbbrev")
+'           Calls subprocedures that open data files, check for errors, format data, and save data into tool
+'Inputs:    MarketAbbrev (3 letter string such as "SFO")
+'Assumes:   Program ranker data is formatted correctly and saved in specific folder structure
+'**************************************************************************
+Sub UpdateMarket(MarketAbbrev As String)
+
+Dim SweepArray(5)           As Sweep            'Array of up to 5 sweeps (current limit, can be changed)
+Dim Counter                 As Integer          'Counter for looping through sweep array
+
+MarketError = False
+
+'Count and set sweep file paths in array item
+Call SweepPaths(MarketAbbrev, SweepArray())
+If MarketError = True Then Exit Sub
+
+'Open the Sweep data files and set Sweep variables (sourcing, etc.), checking for any errors
+Call PopulateSweeps(SweepArray())
+If MarketError = True Then Exit Sub
+
+'Find market's row in the data management file, checking for any errors
+CurrMarketRow = MarketRow(SweepArray(1))
+If MarketError = True Then Exit Sub
+
+'Open and set Slide Generator file; unprotect workbook and clear old data
+Set SlideGeneratorFile = Workbooks.Open(Path & "/Slide Generator Template.xlsm")
+SlideGeneratorFile.Unprotect
+Call ClearData(SlideGeneratorFile.Sheets("Raw Data"))
+
+'Loop through each Sweep/Sweep file: format data and paste data into slide generator file
+For Counter = 1 To SweepCount
+
+    'Format the Sweep data
+    Call FormatData(SweepArray(Counter).DataSheet)
+    Call AddSOVColumns(SweepArray(Counter))
+    If MarketError = True Then Exit Sub
+    
+    'Copy data from the Sweep file and paste it into the slide generator file
+    Call TransferData(SweepArray(Counter).DataSheet)
+    If MarketError = True Then Exit Sub
+    
+    'Close the Sweep workbook
+    SweepArray(Counter).SourceWkbk.Sheets(1).Range("A1").Copy
+    SweepArray(Counter).SourceWkbk.Saved = True
+    SweepArray(Counter).SourceWkbk.Close
+Next
+
+'Remove "-TV" and "º" from network names, refresh all pivot tables in Slide Generator file
+Call RemoveTV
+Call RefreshPivots(SlideGeneratorFile)
+
+Call SourcingEdit(SweepArray(1))
+
+'Hide tabs in slide generator file (all but the "Slide Generator")
+Call HideDataFiles(SlideGeneratorFile, SlideGeneratorFile.Sheets("Slide Generator"))
+
+'Save slide generator file (with market abbreviation in the name)
+SlideGeneratorFile.SaveAs (Path & "/" & "Slide Generator Files/" & _
+MarketAbbrev & " Slide Generator File")
+
+'Protect and close Slide Generator File
+SlideGeneratorFile.Protect
+SlideGeneratorFile.Close
+
+'Record Slide Generator file update information in data management file
+Call RecordSweepUpdate(SweepArray)
+
+End Sub
+
+
+'**************************************************************************
+'Program:   SweepPaths
+'Purpose:   Checks number of Sweep files found in market's folder and sets initial file paths before opening
+'Inputs:    MarketAbbrev (3 letter string such as "SFO"), SweepArray (Array of 5 Sweeps, which store information for a sweep data file)
+'Assumes:   There up to 5 program ranker files in the market's data folder
+'**************************************************************************
+
+Sub SweepPaths(MarketAbbrev As String, ByRef SweepArray() As Sweep)
+
+Dim RawDataFolder       As String
+Dim Filename            As String
+
+'Set Market's raw data folder amd open first file
+RawDataFolder = Path & "/Raw Data/" & MarketAbbrev
+Filename = Dir(RawDataFolder & "/" & "*.xls?")
+
+'Count and set names for all files in market's "Raw Data" folder
+SweepCount = 0
+Do While Filename <> ""
+
+    SweepCount = SweepCount + 1
+    
+    'Error message and exit if there are morethan 4 sweep files
+    If SweepCount > 5 Then
+        MsgBox ("Error: There are more than 5 files (sweeps) in " & MarketAbbrev & " data folder.")
+        MarketError = True
+        Exit Sub
+    End If
+    
+    'Set sweep file path, market abbreviation, and count (information that can be determined before opening files)
+    SweepArray(SweepCount).WkbkAddress = RawDataFolder & "/" & Filename
+    SweepArray(SweepCount).MarketAbbrev = MarketAbbrev
+    SweepArray(SweepCount).SweepNumber = SweepCount
+    Filename = Dir
+Loop
+
+    'Message box if there is no data for market
+    If SweepCount = 0 Then
+        MsgBox ("No data found in " & MarketAbbrev & " data folder.")
+        MarketError = True
+        Exit Sub
+    End If
+
+End Sub
+
+'**************************************************************************
+'Program:   PopulateSweeps
+'Purpose:   Opens each data file in market's folder, checks for error in data/sourcing, and stores variables in a Sweep (type)
+'Inputs:    SweepArray (Array of 5 Sweeps, which store information for a sweep data file)
+'Assumes:   Program ranker data is in specific cells, data is DMA/EDMA, and time period is a sweep (MMMYY)
+'           Sweep months aren't duplicated across files, data feed is consistent in each file
+'**************************************************************************
+
+Sub PopulateSweeps(ByRef SweepArray() As Sweep)
+
+Dim Counter             As Integer
+Dim MarketOriginal      As String
+Dim MonthStart          As Long
+Dim LivePlusPos         As Long
+
+'Loop through and open all Sweep files, setting sourcing variables
+For Counter = 1 To SweepCount
+
+    If SweepArray(Counter).WkbkAddress <> "" Then
+    
+        'Set sweep workbook address and data worksheet
+        Set SweepArray(Counter).SourceWkbk = Workbooks.Open(SweepArray(Counter).WkbkAddress)
+        Set SweepArray(Counter).DataSheet = SweepArray(Counter).SourceWkbk.Sheets(1)
+        
+        'Check program rankers data format and market/book strings
+        Call CheckFormat(SweepArray(Counter))
+        MarketOriginal = CheckBooks(SweepArray(Counter))
+
+        'Find date (5 characters) and market (everything to the left of date) in book name
+        MonthStart = FindMonthStart(MarketOriginal)
+        SweepArray(Counter).Month = "'" & Mid(MarketOriginal, MonthStart, 5)
+        SweepArray(Counter).MarketName = Mid(MarketOriginal, 1, MonthStart - 2)
+            
+        'Find "Live" in string, setting everything right of "Live" start as data feed
+        LivePlusPos = InStr(1, MarketOriginal, "Live")
+        SweepArray(Counter).CDMALivePlus = Mid(MarketOriginal, LivePlusPos)
+        If SweepArray(Counter).NDM = True Then
+            SweepArray(Counter).DMALivePlus = "Live+1"
+        Else
+            SweepArray(Counter).DMALivePlus = SweepArray(Counter).CDMALivePlus
+        End If
+        
+        Call CheckSweepConsistency(SweepArray, SweepArray(Counter))
+    End If
+Next
+
+End Sub
+
+
+'**************************************************************************
+'Program:   FormatData
+'Purpose:   Basic data formatting/removes Program Rankers outline and prepares data for pivot tables
+'Inputs:    SourceSheet (worksheet with program rankers data)
+'Assumes:   Input worksheet has program ranker data in expected cells
+'**************************************************************************
+
+Sub FormatData(SourceSheet As Worksheet)
+
+Dim LastRow             As Long
+Dim RowCount            As Long
+
+SourceSheet.Activate
+
+'Find end of raw data based on position of Strata sentence.
+LastRow = RawDataEnd(SourceSheet)
+
+'Format data
+SourceSheet.Cells.ClearOutline
+SourceSheet.Columns("B:F").UnMerge
+SourceSheet.Rows("1:5").Delete Shift:=xlUp
+SourceSheet.Columns("A:A").Delete Shift:=xlToLeft
+SourceSheet.Columns("A:D").EntireColumn.AutoFit
+
+'Copy down markets, zones, demos, and networks in Program Ranker outline format to following blank cells
+Call CopyDown(SourceSheet.Range("A2"), LastRow)
+Call CopyDown(SourceSheet.Range("B2"), LastRow)
+Call CopyDown(SourceSheet.Range("C2"), LastRow)
+Call CopyDown(SourceSheet.Range("D2"), LastRow)
+
+'Paste special to break formulas in data
+SourceSheet.Range("A1:H" & LastRow).Copy
+SourceSheet.Range("A1").PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+            :=False, Transpose:=False
+
+'Delete out rows with an empty impressions cell(headings and unrated networks)
+For RowCount = (LastRow + 25) To 1 Step -1
+    If SourceSheet.Range("H" & RowCount) = "" Then
+        SourceSheet.Rows(RowCount & ":" & RowCount).Delete
+    End If
+Next RowCount
+
+SourceSheet.Columns("A").ColumnWidth = 20
+
+'Add column headers
+SourceSheet.Range("A1").Value = "Market"
+SourceSheet.Range("B1").Value = "Zone"
+SourceSheet.Range("C1").Value = "Demo"
+SourceSheet.Range("D1").Value = "Net"
+SourceSheet.Range("E1").Value = "Daypart"
+
+'Delete TP and Program Name Columns (useless)
+SourceSheet.Columns("F:G").Delete
+
+End Sub
+
+Function RawDataEnd(DataSheet As Worksheet) As Long
+'Find the end of raw data by looking for STRATA string
+'Called during FormatData
+
+Dim SearchString    As String
+SearchString = "This report has been prepared using STRATA NuMath research."
+Dim cl              As Range
+Set cl = DataSheet.Cells.Find(What:=SearchString, _
+    After:=DataSheet.Cells(1, 1), _
+    LookIn:=xlValues, _
+    LookAt:=xlPart, _
+    SearchOrder:=xlByRows, _
+    SearchDirection:=xlNext, _
+    MatchCase:=False, _
+    SearchFormat:=False)
+    
+If Not cl Is Nothing Then
+    RawDataEnd = cl.Row - 2
+Else
+    MsgBox ("Could not find end of data.")
+    MarketError = True
+    Exit Function
+End If
+
+End Function
+
+Sub CopyDown(DataStart As Range, LastRow As Long)
+'Used in data format to copy down markets, zones, demos, and nets (from outline format) to blank cells underneath
+'Called during FormatData
+
+Dim topcell As Range, bottomcell As Range
+
+DataStart.Select
+
+Set topcell = ActiveSheet.Cells(1, ActiveCell.Column)
+If IsEmpty(topcell) Then Set topcell = topcell.End(xlDown)
+Set bottomcell = ActiveSheet.Cells(LastRow - 5, ActiveCell.Column)
+ActiveSheet.Range(topcell, bottomcell).Select
+Selection.SpecialCells(xlBlanks).Select
+Selection.FormulaR1C1 = "=R[-1]C"
+
+End Sub
+
+Sub ClearData(DataSheet As Worksheet)
+'Clear raw data from worksheet (data sheet in slide generator file)
+
+DataSheet.Activate
+Range("A2:K2").Select
+Range(Selection, Selection.End(xlDown)).Select
+Selection.ClearContents
+
+End Sub
+
+Sub TransferData(InputSheet As Worksheet)
+'Copy and paste data from Sweep data files into slide generator file
+
+Dim Target As Range
+SlideGeneratorFile.Sheets("Raw Data").Visible = True
+Set Target = TargetDataEnd(SlideGeneratorFile.Sheets("Raw Data"))
+
+InputSheet.Activate
+Range("A2").Select
+Range(Selection, Selection.End(xlDown)).Select
+Range(Selection, Selection.End(xlToRight)).Select
+Selection.Copy
+Target.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+:=False, Transpose:=False
+
+End Sub
+
+Sub RefreshPivots(TargetWorkbook As Workbook)
+'Refresh all pivot tables in the given workbook
+
+Dim Worksheet As Worksheet, Pivots As PivotTable
+For Each Worksheet In TargetWorkbook.Sheets
+    For Each Pivots In Worksheet.PivotTables
+        Pivots.RefreshTable
+    Next
+Next
+
+End Sub
