@@ -1,0 +1,368 @@
+Option Explicit
+
+Const PPBase                As String = "Z:\Departments\Research\Division\Projects\1-Sheets\Network One Sheet Base-Empty.pptm"
+Public PPT                  As Object
+Public TablePres            As Presentation
+Public CurrNetSlide         As Slide
+
+Private DataBook            As Workbook
+Private DataSheet           As Worksheet
+
+Private Source              As String
+Private DataSource          As String
+Private QualSurvey          As String
+Private Geography           As String
+Private Demo                As String
+Private Base                As String
+Private BaseProfile         As String
+Private Copyright           As String
+
+Private QualNumber          As Integer
+Private IntabNote           As String
+
+Private CurrNetNameRange    As Range
+Private CurrNetName         As String
+
+Private PPTable             As PowerPoint.Table
+
+Public Type Qualitative
+    Row                     As Integer
+    StringCheck(4)          As String
+    PercentValue            As Double
+    RowCorrect              As Boolean
+End Type
+
+Private QualArray(15)       As Qualitative
+
+
+Sub NetworkOneSheet()
+
+Set DataBook = ActiveWorkbook
+Set DataSheet = ActiveWorkbook.Sheets(1)
+
+Call CheckScarbFormat
+Call QualLabelSet
+If Not QualCheck Then Exit Sub
+
+If Not VerifyFiles Then Exit Sub
+Set CurrNetSlide = OpenSlide(PPBase, 1)
+
+Call NetworkLoop
+      
+End Sub
+Sub CheckScarbFormat()
+
+If DataSheet.Range("A1").Value <> "Qual. Survey:" Then
+    MsgBox ("Worksheet Format Error")
+    Exit Sub
+ElseIf DataSheet.Range("A4").Value <> "Base Profile:" Then
+    MsgBox ("Worksheet Format Error")
+    Exit Sub
+ElseIf DataSheet.Range("D11").Value <> "Intab" Then
+    MsgBox ("Worksheet Format Error")
+    Exit Sub
+End If
+
+If DataSheet.Range("C4") <> "<All Respondents>" Then
+    Base = "Base: " & DataSheet.Range("C4") & ", "
+Else
+    Base = ""
+End If
+
+QualSurvey = Replace(Replace(DataSheet.Range("C1").Value, ", Scarborough", ""), ", Experian Simmons", "")
+Demo = Replace(DataSheet.Range("C3").Value, "A18+", "Adults 18+")
+
+If InStr(1, DataSheet.Range("C7").Value, "Experian") Then
+    DataSource = "SimmonsLOCAL"
+    Copyright = "© Copyright 2014 Experian Simmons. Sum of percentages may not add up to 100%."
+Else
+    DataSource = "Nielsen Scarborough"
+    Copyright = "Sum of percentages may not add up to 100%."
+    'Scarborough sourcing requirements have been relaxed.
+    '"Scarborough Data & Reports are protected under the federal Copyright Act and are the registered intellectual property of Scarborough Research & Arbitron, Inc.  Any use of the Scarborough Data is subject to all limitations and qualifications contained in the Report."
+End If
+
+End Sub
+
+Sub QualLabelSet()
+
+'Number of Qualitative data categories/rows. If this number changes, remember to also change it in QualArray declaration.
+QualNumber = 15
+
+'Set each qualitative expected row number and label (up to 3 'string checks')
+With QualArray(1)
+    .Row = 14
+    .StringCheck(1) = "18-34"
+    .StringCheck(2) = "18 - 34"
+End With
+
+With QualArray(2)
+    .Row = 15
+    .StringCheck(1) = "35-54"
+    .StringCheck(2) = "35 - 54"
+End With
+
+With QualArray(3)
+    .Row = 16
+    .StringCheck(1) = "55+"
+    .StringCheck(2) = "55 -70 or older"
+End With
+
+With QualArray(4)
+    .Row = 18
+    .StringCheck(1) = "Male"
+    .StringCheck(2) = "Men"
+    .StringCheck(3) = "MALE"
+End With
+
+With QualArray(5)
+    .Row = 19
+    .StringCheck(1) = "Female"
+    .StringCheck(2) = "Women"
+    .StringCheck(3) = "FEMALE"
+End With
+
+With QualArray(6)
+    .Row = 21
+    .StringCheck(1) = "Some College (1-3 Yrs. No Degree)"
+    .StringCheck(2) = "Some college(1-3 yr-not Grad/AA/)"
+    .StringCheck(3) = "Attended College But Did Nt Grdte"
+    .StringCheck(4) = "COLLEGE - LESS THAN 1 YEAR OR COLLEGE - 1 FULL YEAR OR COLLEGE - 2 FULL YEARS OR COLLEGE-3 FULL YRS+-DID NOT GRAD"
+End With
+
+With QualArray(7)
+    .Row = 22
+    .StringCheck(1) = "College Graduate (4 Yrs. College) OR Some Post Graduate (No Degree) OR Post Graduate Degree"
+    .StringCheck(2) = "College graduate (4 year college) OR Some Post Graduate (No Degree) OR Post graduate degree"
+    .StringCheck(3) = "Graduatd Frm 2-Yr Clg/Tchncl Schl OR Graduated From 4-Year College OR Post-Graduate Study OR Post-Graduate Degree"
+    .StringCheck(4) = "GRADUATED COLLEGE OR MORE"
+End With
+
+With QualArray(8)
+    .Row = 24
+    .StringCheck(1) = "$30,000-$49,999"
+    .StringCheck(2) = "$30,000 - $49,999"
+    .StringCheck(3) = "$30,000 - $34,999 OR $35,000 - $39,999 OR $40,000 - $44,999 OR $45,000 - $49,999"
+End With
+
+With QualArray(9)
+    .Row = 25
+    .StringCheck(1) = "$50,000-$74,999"
+    .StringCheck(2) = "$50,000 - $74,999"
+    .StringCheck(3) = "$50,000 - $59,999 OR $60,000 - $74,999"
+End With
+
+With QualArray(10)
+    .Row = 26
+    .StringCheck(1) = "$75,000+"
+    .StringCheck(2) = "$75,000 -$250,000 or more"
+    .StringCheck(3) = "$75,000 OR MORE"
+End With
+
+With QualArray(11)
+    .Row = 28
+    .StringCheck(1) = "Own"
+    .StringCheck(2) = "OWN (ANY)"
+End With
+
+With QualArray(12)
+    .Row = 29
+    .StringCheck(1) = "Rent"
+    .StringCheck(2) = "RENT (ANY)"
+End With
+
+With QualArray(13)
+    .Row = 31
+    .StringCheck(1) = "1+"
+    .StringCheck(2) = "One to Nine or more"
+    .StringCheck(3) = "ONE OR MORE"
+End With
+
+With QualArray(14)
+    .Row = 33
+    .StringCheck(1) = "Single (Never Married)"
+    .StringCheck(2) = "Never married (single)"
+    .StringCheck(3) = "Single, Never Married"
+    .StringCheck(4) = "NEVER MARRIED"
+End With
+
+With QualArray(15)
+    .Row = 34
+    .StringCheck(1) = "Married"
+    .StringCheck(2) = "PRESENTLY MARRIED"
+End With
+
+End Sub
+
+Function QualCheck() As Boolean
+
+Dim QualCheckCounter        As Integer
+Dim StringCheckCount        As Integer
+Dim ErrorCounter            As Integer
+
+ErrorCounter = 0
+
+'Check if cells in Column B (in "QualArray(#).Row") match expected values defined by "QualArray(#).StringCheck"
+For QualCheckCounter = 1 To QualNumber
+    With QualArray(QualCheckCounter)
+        .RowCorrect = False
+        For StringCheckCount = 1 To 4
+            If DataSheet.Range("B" & .Row).Value = .StringCheck(StringCheckCount) Then
+                .RowCorrect = True
+            End If
+        Next
+        
+        If .RowCorrect = False Then
+            MsgBox ("Data label in row " & .Row & " does not match expected value (" & .StringCheck(1) & ")")
+            ErrorCounter = ErrorCounter + 1
+        End If
+    End With
+Next
+
+'Error message and error if more than half of the data doesn't line up with the template (not worth it to run)
+If ErrorCounter > QualNumber / 2 Then
+    MsgBox ("Less than 50% of data labels/rows don't match expected layout. Check/repull data and retry.")
+    QualCheck = False
+Else
+    QualCheck = True
+End If
+
+End Function
+
+Function VerifyFiles() As Boolean
+
+    VerifyFiles = True
+    If Not FileFolderExists(PPBase) Then
+        MsgBox ("The base PowerPoint file could not be located.")
+        VerifyFiles = False
+    End If
+    
+End Function
+Public Function FileFolderExists(strFullPath As String) As Boolean
+
+'Author       : Ken Puls (www.excelguru.ca)
+'Macro Purpose: Check if a file or folder exists
+    On Error GoTo EarlyExit
+    If Not Dir(strFullPath, vbDirectory) = vbNullString Then FileFolderExists = True
+    
+EarlyExit:
+    On Error GoTo 0
+    
+End Function
+Function OpenSlide(PowerPointBase As String, SlideNum As Integer) As Slide
+
+    Set PPT = CreateObject("PowerPoint.Application")
+    Set TablePres = PPT.Presentations.Open(PowerPointBase, msoTrue, msoTrue, msoTrue)
+    Set OpenSlide = TablePres.Slides(SlideNum)
+    PPT.Activate
+    
+End Function
+
+Sub NetworkLoop()
+
+Dim QualSetCounter           As Integer
+Dim SlideCounter             As Integer
+
+SlideCounter = 1
+
+If DataSheet.Range("D9") = "Total" Then
+    Set CurrNetNameRange = DataSheet.Range("G10")
+Else
+    Set CurrNetNameRange = DataSheet.Range("D10")
+End If
+
+While CurrNetNameRange.Value <> ""
+
+    If DataSheet.Cells(11, CurrNetNameRange.Column).Value <> "Intab" Then
+        MsgBox ("Format Error: Did find the word 'Intab' in cell.")
+        Exit Sub
+    ElseIf DataSheet.Cells(12, CurrNetNameRange.Column).Value < 35 Then
+        CurrNetName = Replace(CurrNetNameRange.Value, "dys", "days")
+        IntabNote = "Target Intab is " & DataSheet.Cells(12, CurrNetNameRange.Column).Value & "! Use Scarborough USA!"
+    Else
+        CurrNetName = Replace(CurrNetNameRange.Value, "dys", "days")
+        IntabNote = "Intab = " & DataSheet.Cells(12, CurrNetNameRange.Column).Value
+    End If
+
+    For QualSetCounter = 1 To QualNumber
+        If QualArray(QualSetCounter).RowCorrect = True Then
+            QualArray(QualSetCounter).PercentValue = DataSheet.Cells(QualArray(QualSetCounter).Row, CurrNetNameRange.Column + 1).Value
+        Else
+            QualArray(QualSetCounter).PercentValue = -1
+        End If
+    Next
+    
+    Call DataToPowerPoint
+    Call AddTableContents
+    
+SlideCounter = SlideCounter + 1
+Set CurrNetSlide = TablePres.Slides(SlideCounter)
+
+Set CurrNetNameRange = DataSheet.Cells(10, CurrNetNameRange.Column + 3)
+
+Wend
+
+End Sub
+
+Sub DataToPowerPoint()
+
+Dim NetNameShape            As PowerPoint.Shape
+Dim IntabShape              As PowerPoint.Shape
+
+Set NetNameShape = CurrNetSlide.Shapes.AddTextbox(msoTextOrientationHorizontal, 0.75 * 72, 0.02 * 72, 4 * 72, 2 * 72)
+With NetNameShape.TextFrame.TextRange
+    .Text = CurrNetName
+    .Font.Size = 24
+End With
+
+Set IntabShape = CurrNetSlide.Shapes.AddTextbox(msoTextOrientationHorizontal, 0.26 * 72, 6.4 * 72, 9.5 * 72, 0.69 * 72)
+With IntabShape.TextFrame.TextRange
+    .Text = IntabNote
+    .Font.Size = 14
+End With
+
+Source = "Source: " & DataSource & " " & QualSurvey & ", " & Demo & ", " & Base & CurrNetName & ". " & Copyright
+Set IntabShape = CurrNetSlide.Shapes.AddTextbox(msoTextOrientationHorizontal, 0.33 * 72, 7.05 * 72, 6.42 * 72, 0.58 * 72)
+With IntabShape.TextFrame.TextRange
+    .Text = Source
+    .Font.Size = 8
+    .Font.Italic = msoTrue
+End With
+
+End Sub
+
+Sub AddTableContents()
+    'Cell intertation variables
+    
+    Dim PPShape     As PowerPoint.Shape
+    
+    For Each PPShape In CurrNetSlide.Shapes
+        If PPShape.Type = msoTable Then
+            Set PPTable = PPShape.Table
+            
+            Call DataToTable(1, 2)
+            Call DataToTable(2, 3)
+            Call DataToTable(3, 4)
+            Call DataToTable(4, 6)
+            Call DataToTable(5, 7)
+            Call DataToTable(6, 9)
+            Call DataToTable(7, 10)
+            Call DataToTable(8, 12)
+            Call DataToTable(9, 13)
+            Call DataToTable(10, 14)
+            Call DataToTable(11, 16)
+            Call DataToTable(12, 17)
+            Call DataToTable(13, 19)
+            Call DataToTable(14, 21)
+            Call DataToTable(15, 22)
+            
+        End If
+    Next
+    
+End Sub
+
+Sub DataToTable(QualArrayIndex As Integer, TableRow As Integer)
+
+PPTable.Cell(TableRow, 3).Shape.TextFrame.TextRange.Text = Format(QualArray(QualArrayIndex).PercentValue, "0.0%")
+
+End Sub
